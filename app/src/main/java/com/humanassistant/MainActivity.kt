@@ -21,7 +21,7 @@ import androidx.core.content.ContextCompat
 import androidx.lifecycle.lifecycleScope
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
-import com.humanassistant.data.PendingRequest
+import com.humanassistant.server.PendingRequest
 import kotlinx.coroutines.launch
 
 class MainActivity : AppCompatActivity() {
@@ -75,7 +75,6 @@ class MainActivity : AppCompatActivity() {
 
     override fun onStart() {
         super.onStart()
-        // Try to bind to the service if it's already running
         val intent = Intent(this, ServerService::class.java)
         bindService(intent, serviceConnection, Context.BIND_AUTO_CREATE)
     }
@@ -86,6 +85,11 @@ class MainActivity : AppCompatActivity() {
             unbindService(serviceConnection)
             isServiceBound = false
         }
+    }
+
+    override fun onResume() {
+        super.onResume()
+        viewModel.loadFriends()
     }
 
     private fun initViews() {

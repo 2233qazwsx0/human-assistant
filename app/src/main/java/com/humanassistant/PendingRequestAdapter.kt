@@ -5,7 +5,7 @@ import android.view.View
 import android.view.ViewGroup
 import android.widget.TextView
 import androidx.recyclerview.widget.RecyclerView
-import com.humanassistant.data.PendingRequest
+import com.humanassistant.server.PendingRequest
 
 class PendingRequestAdapter(
     private val onItemClick: (PendingRequest) -> Unit

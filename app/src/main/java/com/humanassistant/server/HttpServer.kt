@@ -1,9 +1,7 @@
 package com.humanassistant.server
 
 import android.content.Context
-import com.humanassistant.data.AppDatabase
-import com.humanassistant.data.Friend
-import com.humanassistant.data.PendingRequest
+import android.content.SharedPreferences
 import io.ktor.server.application.*
 import io.ktor.server.engine.*
 import io.ktor.server.netty.*
@@ -19,7 +17,6 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.serialization.json.Json
 import java.util.UUID
-import java.util.concurrent.ConcurrentHashMap
 
 class HttpServer(
     private val context: Context,
@@ -27,7 +24,7 @@ class HttpServer(
     private val onRequestTimeout: (String) -> Unit
 ) {
     private var server: NettyApplicationEngine? = null
-    private val database = AppDatabase.getDatabase(context)
+    private val sharedPrefs: SharedPreferences = context.getSharedPreferences("FriendBalance", Context.MODE_PRIVATE)
     private val pendingRequests = ConcurrentHashMap<String, PendingRequest>()
     
     private val _pendingRequestsFlow = MutableStateFlow<List<PendingRequest>>(emptyList())
@@ -96,13 +93,8 @@ class HttpServer(
             return
         }
 
-        var friend = database.friendDao().getFriendByApiKey(apiKey)
-        if (friend == null) {
-            friend = Friend(apiKey, friendName, 100)
-            database.friendDao().insertFriend(friend)
-        }
-
-        if (friend.balance <= 0) {
+        val currentBalance = getFriendBalance(apiKey)
+        if (currentBalance <= 0) {
             call.respond(HttpStatusCode.PaymentRequired, ErrorResponse(
                 ErrorDetail("余额不足啦！快去充值（开玩笑的，其实是我不想理你了🤪）", "insufficient_balance", "balance_zero")
             ))
@@ -136,10 +128,7 @@ class HttpServer(
         try {
             withTimeout(60_000L) {
                 val reply = deferred.await()
-
-                val updatedFriend = friend.copy(balance = friend.balance - 1)
-                database.friendDao().updateFriend(updatedFriend)
-
+                deductFriendBalance(apiKey)
                 call.respond(
                     ChatCompletionResponse(
                         id = "chatcmpl-${requestId.take(8)}",
@@ -161,4 +150,22 @@ class HttpServer(
             ))
         }
     }
+
+    private fun getFriendBalance(apiKey: String): Int {
+        val defaultBalance = 100
+        return sharedPrefs.getInt(apiKey, defaultBalance)
+    }
+
+    private fun deductFriendBalance(apiKey: String) {
+        val current = getFriendBalance(apiKey)
+        sharedPrefs.edit().putInt(apiKey, current - 1).apply()
+    }
 }
+
+data class PendingRequest(
+    val requestId: String,
+    val apiKey: String,
+    val friendName: String,
+    val message: String,
+    val deferred: CompletableDeferred<String>
+)

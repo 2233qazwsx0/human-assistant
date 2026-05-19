@@ -5,13 +5,12 @@ import android.view.View
 import android.view.ViewGroup
 import android.widget.TextView
 import androidx.recyclerview.widget.RecyclerView
-import com.humanassistant.data.Friend
 
 class FriendBalanceAdapter : RecyclerView.Adapter<FriendBalanceAdapter.ViewHolder>() {
 
-    private var items: List<Friend> = emptyList()
+    private var items: List<FriendInfo> = emptyList()
 
-    fun submitList(list: List<Friend>) {
+    fun submitList(list: List<FriendInfo>) {
         items = list
         notifyDataSetChanged()
     }
@@ -20,7 +19,7 @@ class FriendBalanceAdapter : RecyclerView.Adapter<FriendBalanceAdapter.ViewHolde
         val tvFriendName: TextView = view.findViewById(R.id.tvFriendName)
         val tvFriendBalance: TextView = view.findViewById(R.id.tvFriendBalance)
 
-        fun bind(friend: Friend) {
+        fun bind(friend: FriendInfo) {
             tvFriendName.text = friend.name
             tvFriendBalance.text = "${friend.balance} tokens"
         }

@@ -11,7 +11,7 @@ import android.os.Build
 import android.os.Binder
 import android.os.IBinder
 import androidx.core.app.NotificationCompat
-import com.humanassistant.data.PendingRequest
+import com.humanassistant.server.PendingRequest
 import com.humanassistant.server.HttpServer
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
