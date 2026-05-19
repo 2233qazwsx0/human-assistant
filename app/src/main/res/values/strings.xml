@@ -1,0 +1,19 @@
+<resources>
+    <string name="app_name">Human Assistant</string>
+    <string name="server_status">服务器状态</string>
+    <string name="server_running">运行中</string>
+    <string name="server_stopped">已停止</string>
+    <string name="start_server">启动服务器</string>
+    <string name="stop_server">停止服务器</string>
+    <string name="server_address">服务器地址</string>
+    <string name="pending_requests">待处理请求</string>
+    <string name="friend_balance">好友余额</string>
+    <string name="friend_reminder">好友提醒</string>
+    <string name="reply">回复</string>
+    <string name="send">发送</string>
+    <string name="original_message">原始消息</string>
+    <string name="sender">发送者</string>
+    <string name="type_reply">输入回复内容</string>
+    <string name="notification_channel_name">消息通知</string>
+    <string name="notification_channel_desc">收到好友消息时的通知</string>
+</resources>
