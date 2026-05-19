@@ -1,5 +1,1 @@
-plugins {
-    id("com.android.application") version "8.2.2"
-    id("org.jetbrains.kotlin.android") version "1.9.22"
-    id("org.jetbrains.kotlin.plugin.serialization") version "1.9.22"
-}
+// 根 build.gradle.kts - 不声明应用插件，只做全局配置
