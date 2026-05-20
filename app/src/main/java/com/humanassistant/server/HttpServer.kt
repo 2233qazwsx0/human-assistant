@@ -17,6 +17,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.serialization.json.Json
 import java.util.UUID
+import java.util.concurrent.ConcurrentHashMap
 
 class HttpServer(
     private val context: Context,
@@ -59,15 +60,15 @@ class HttpServer(
     }
 
     fun completeRequest(requestId: String, reply: String) {
-        pendingRequests.remove(requestId)?.let {
-            it.deferred.complete(reply)
+        pendingRequests.remove(requestId)?.let { pending ->
+            pending.deferred.complete(reply)
             updatePendingRequestsFlow()
         }
     }
 
     fun cancelRequest(requestId: String) {
-        pendingRequests.remove(requestId)?.let {
-            it.deferred.cancel("Request cancelled")
+        pendingRequests.remove(requestId)?.let { pending ->
+            pending.deferred.cancel("Request cancelled")
             updatePendingRequestsFlow()
         }
     }
@@ -110,7 +111,7 @@ class HttpServer(
             return
         }
 
-        val userMessage = request.messages.lastOrNull { it.role == "user" }?.content ?: run {
+        val userMessage = request.messages.lastOrNull { msg -> msg.role == "user" }?.content ?: run {
             call.respond(HttpStatusCode.BadRequest, ErrorResponse(
                 ErrorDetail("No user message found", "invalid_request_error", "no_user_message")
             ))
