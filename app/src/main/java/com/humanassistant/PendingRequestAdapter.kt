@@ -1,5 +1,7 @@
 package com.humanassistant
 
+import android.os.Handler
+import android.os.Looper
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
@@ -12,20 +14,23 @@ class PendingRequestAdapter(
 ) : RecyclerView.Adapter<PendingRequestAdapter.ViewHolder>() {
 
     private var items: List<PendingRequest> = emptyList()
+    private val mainHandler = Handler(Looper.getMainLooper())
 
     fun submitList(list: List<PendingRequest>) {
-        items = list
-        notifyDataSetChanged()
+        mainHandler.post {
+            items = list
+            notifyDataSetChanged()
+        }
     }
 
-    inner class ViewHolder(view: View) : RecyclerView.ViewHolder(view) {
+    class ViewHolder(view: View) : RecyclerView.ViewHolder(view) {
         val tvRequestId: TextView = view.findViewById(R.id.tvRequestId)
         val tvRequestMessage: TextView = view.findViewById(R.id.tvRequestMessage)
 
         fun bind(request: PendingRequest) {
             tvRequestId.text = "Request ID: ${request.requestId.take(8)}..."
             tvRequestMessage.text = "${request.friendName}: ${request.message}"
-            itemView.setOnClickListener { onItemClick(request) }
+            itemView.setOnClickListener { /* 点击事件由 adapter 处理 */ }
         }
     }
 
@@ -36,7 +41,9 @@ class PendingRequestAdapter(
     }
 
     override fun onBindViewHolder(holder: ViewHolder, position: Int) {
-        holder.bind(items[position])
+        val item = items.getOrNull(position) ?: return
+        holder.bind(item)
+        holder.itemView.setOnClickListener { onItemClick(item) }
     }
 
     override fun getItemCount(): Int = items.size

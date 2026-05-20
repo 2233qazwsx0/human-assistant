@@ -1,5 +1,7 @@
 package com.humanassistant
 
+import android.os.Handler
+import android.os.Looper
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
@@ -9,13 +11,16 @@ import androidx.recyclerview.widget.RecyclerView
 class FriendBalanceAdapter : RecyclerView.Adapter<FriendBalanceAdapter.ViewHolder>() {
 
     private var items: List<FriendInfo> = emptyList()
+    private val mainHandler = Handler(Looper.getMainLooper())
 
     fun submitList(list: List<FriendInfo>) {
-        items = list
-        notifyDataSetChanged()
+        mainHandler.post {
+            items = list
+            notifyDataSetChanged()
+        }
     }
 
-    inner class ViewHolder(view: View) : RecyclerView.ViewHolder(view) {
+    class ViewHolder(view: View) : RecyclerView.ViewHolder(view) {
         val tvFriendName: TextView = view.findViewById(R.id.tvFriendName)
         val tvFriendBalance: TextView = view.findViewById(R.id.tvFriendBalance)
 
@@ -32,7 +37,8 @@ class FriendBalanceAdapter : RecyclerView.Adapter<FriendBalanceAdapter.ViewHolde
     }
 
     override fun onBindViewHolder(holder: ViewHolder, position: Int) {
-        holder.bind(items[position])
+        val item = items.getOrNull(position) ?: return
+        holder.bind(item)
     }
 
     override fun getItemCount(): Int = items.size
