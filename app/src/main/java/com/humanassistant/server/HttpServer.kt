@@ -6,6 +6,7 @@ import io.ktor.server.application.*
 import io.ktor.server.engine.*
 import io.ktor.server.netty.*
 import io.ktor.server.plugins.contentnegotiation.*
+import io.ktor.server.plugins.statuspages.*
 import io.ktor.server.request.*
 import io.ktor.server.response.*
 import io.ktor.server.routing.*
@@ -18,6 +19,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.serialization.json.Json
 import java.util.UUID
 import java.util.concurrent.ConcurrentHashMap
+import java.util.concurrent.locks.ReentrantLock
 
 class HttpServer(
     private val context: Context,
@@ -27,6 +29,7 @@ class HttpServer(
     private var server: NettyApplicationEngine? = null
     private val sharedPrefs: SharedPreferences = context.getSharedPreferences("FriendBalance", Context.MODE_PRIVATE)
     private val pendingRequests = ConcurrentHashMap<String, PendingRequest>()
+    private val balanceLock = ReentrantLock()
     
     private val _pendingRequestsFlow = MutableStateFlow<List<PendingRequest>>(emptyList())
     val pendingRequestsFlow: StateFlow<List<PendingRequest>> = _pendingRequestsFlow.asStateFlow()
@@ -42,10 +45,25 @@ class HttpServer(
             install(ContentNegotiation) {
                 json(Json {
                     ignoreUnknownKeys = true
+                    isLenient = true
+                    encodeDefaults = true
+                    prettyPrint = false
                 })
+            }
+            
+            install(StatusPages) {
+                exception<Throwable> { call, cause ->
+                    call.respond(HttpStatusCode.InternalServerError, ErrorResponse(
+                        ErrorDetail("Server error: ${cause.message}", "server_error", "internal")
+                    ))
+                }
             }
 
             routing {
+                get("/health") {
+                    call.respond(HttpStatusCode.OK, mapOf("status" to "healthy"))
+                }
+                
                 post("/v1/chat/completions") {
                     handleChatCompletion(call)
                 }
@@ -54,9 +72,13 @@ class HttpServer(
     }
 
     fun stop() {
-        server?.stop(1000, 2000)
+        pendingRequests.values.forEach { pending ->
+            pending.deferred.cancel("Server shutting down")
+        }
         pendingRequests.clear()
         _pendingRequestsFlow.value = emptyList()
+        server?.stop(3000, 5000)
+        server = null
     }
 
     fun completeRequest(requestId: String, reply: String) {
@@ -129,18 +151,24 @@ class HttpServer(
         try {
             withTimeout(60_000L) {
                 val reply = deferred.await()
-                deductFriendBalance(apiKey)
-                call.respond(
-                    ChatCompletionResponse(
-                        id = "chatcmpl-${requestId.take(8)}",
-                        model = request.model,
-                        choices = listOf(
-                            ChatCompletionChoice(
-                                message = ChatMessage("assistant", reply)
+                val deducted = deductFriendBalance(apiKey)
+                if (deducted) {
+                    call.respond(
+                        ChatCompletionResponse(
+                            id = "chatcmpl-${requestId.take(8)}",
+                            model = request.model,
+                            choices = listOf(
+                                ChatCompletionChoice(
+                                    message = ChatMessage("assistant", reply)
+                                )
                             )
                         )
-                    )
-                )
+                    }
+                } else {
+                    call.respond(HttpStatusCode.PaymentRequired, ErrorResponse(
+                        ErrorDetail("余额不足", "insufficient_balance", "balance_zero")
+                    ))
+                }
             }
         } catch (e: TimeoutCancellationException) {
             pendingRequests.remove(requestId)
@@ -148,6 +176,12 @@ class HttpServer(
             onRequestTimeout(requestId)
             call.respond(HttpStatusCode.RequestTimeout, ErrorResponse(
                 ErrorDetail("主人太忙了，没时间回复你😅", "request_timeout", "timeout")
+            ))
+        } catch (e: CancellationException) {
+            pendingRequests.remove(requestId)
+            updatePendingRequestsFlow()
+            call.respond(HttpStatusCode.InternalServerError, ErrorResponse(
+                ErrorDetail("请求被取消", "request_cancelled", "cancelled")
             ))
         }
     }
@@ -157,9 +191,19 @@ class HttpServer(
         return sharedPrefs.getInt(apiKey, defaultBalance)
     }
 
-    private fun deductFriendBalance(apiKey: String) {
-        val current = getFriendBalance(apiKey)
-        sharedPrefs.edit().putInt(apiKey, current - 1).apply()
+    private fun deductFriendBalance(apiKey: String): Boolean {
+        balanceLock.lock()
+        return try {
+            val current = getFriendBalance(apiKey)
+            if (current <= 0) {
+                false
+            } else {
+                sharedPrefs.edit().putInt(apiKey, current - 1).commit()
+                true
+            }
+        } finally {
+            balanceLock.unlock()
+        }
     }
 }
 

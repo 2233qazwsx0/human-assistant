@@ -16,4 +16,31 @@
     <string name="type_reply">输入回复内容</string>
     <string name="notification_channel_name">消息通知</string>
     <string name="notification_channel_desc">收到好友消息时的通知</string>
+    
+    <!-- Foreground Service -->
+    <string name="foreground_channel_name">服务器服务</string>
+    <string name="foreground_channel_desc">运行HTTP服务器的前台服务</string>
+    <string name="notification_title">Human Assistant 服务器</string>
+    <string name="notification_content">服务器正在 8080 端口运行</string>
+    
+    <!-- Error Messages -->
+    <string name="msg_notification_permission_required">需要通知权限</string>
+    <string name="msg_send_success">发送成功</string>
+    <string name="msg_server_not_running">服务器未运行</string>
+    <string name="msg_service_not_available">服务不可用</string>
+    <string name="msg_discard_reply">放弃回复</string>
+    <string name="msg_discard_reply_message">确定要放弃已输入的内容吗？</string>
+    <string name="msg_unknown_sender">未知发送者</string>
+    <string name="msg_no_message">无消息</string>
+    <string name="msg_invalid_request">无效的请求</string>
+    <string name="msg_reply_too_long">回复内容过长</string>
+    <string name="msg_error_send_failed">发送失败</string>
+    
+    <!-- Accessibility -->
+    <string name="desc_server_status">服务器状态</string>
+    <string name="desc_friend_balance">好友余额</string>
+    <string name="desc_pending_request">待处理请求</string>
+    
+    <!-- UI States -->
+    <string name="placeholder">-</string>
 </resources>

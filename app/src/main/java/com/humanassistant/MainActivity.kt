@@ -18,18 +18,28 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.viewModels
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.content.ContextCompat
+import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.lifecycleScope
+import androidx.lifecycle.repeatOnLifecycle
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
 import com.humanassistant.server.PendingRequest
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
+import java.net.Inet4Address
+import java.net.NetworkInterface
 
 class MainActivity : AppCompatActivity() {
+
+    companion object {
+        private const val KEY_SERVER_RUNNING = "server_running"
+    }
 
     private val viewModel: MainViewModel by viewModels()
     private var serverService: ServerService? = null
     private var isServiceBound = false
     private var isServerRunning = false
+    private var pendingRequestsJob: Job? = null
     
     private lateinit var tvServerStatus: TextView
     private lateinit var tvServerAddress: TextView
@@ -44,7 +54,7 @@ class MainActivity : AppCompatActivity() {
         ActivityResultContracts.RequestPermission()
     ) { isGranted ->
         if (!isGranted) {
-            Toast.makeText(this, "Notification permission required", Toast.LENGTH_SHORT).show()
+            Toast.makeText(this, R.string.msg_notification_permission_required, Toast.LENGTH_SHORT).show()
         }
     }
 
@@ -54,11 +64,14 @@ class MainActivity : AppCompatActivity() {
             serverService = binder.getService()
             isServiceBound = true
             observePendingRequests()
+            syncServerRunningState()
         }
 
         override fun onServiceDisconnected(name: ComponentName?) {
             isServiceBound = false
             serverService = null
+            pendingRequestsJob?.cancel()
+            pendingRequestsJob = null
         }
     }
 
@@ -67,10 +80,16 @@ class MainActivity : AppCompatActivity() {
         enableEdgeToEdge()
         setContentView(R.layout.activity_main)
 
+        restoreInstanceState(savedInstanceState)
         initViews()
         setupRecyclerViews()
         checkNotificationPermission()
         observeData()
+    }
+
+    override fun onSaveInstanceState(outState: Bundle) {
+        super.onSaveInstanceState(outState)
+        outState.putBoolean(KEY_SERVER_RUNNING, isServerRunning)
     }
 
     override fun onStart() {
@@ -85,11 +104,26 @@ class MainActivity : AppCompatActivity() {
             unbindService(serviceConnection)
             isServiceBound = false
         }
+        serverService = null
+        pendingRequestsJob?.cancel()
+        pendingRequestsJob = null
     }
 
     override fun onResume() {
         super.onResume()
         viewModel.loadFriends()
+    }
+
+    override fun onDestroy() {
+        super.onDestroy()
+        pendingRequestsJob?.cancel()
+        pendingRequestsJob = null
+    }
+
+    private fun restoreInstanceState(savedInstanceState: Bundle?) {
+        if (savedInstanceState != null) {
+            isServerRunning = savedInstanceState.getBoolean(KEY_SERVER_RUNNING, false)
+        }
     }
 
     private fun initViews() {
@@ -106,6 +140,7 @@ class MainActivity : AppCompatActivity() {
                 startServer()
             }
         }
+        updateUI()
     }
 
     private fun setupRecyclerViews() {
@@ -143,13 +178,22 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun observePendingRequests() {
+        pendingRequestsJob?.cancel()
         serverService?.getHttpServer()?.let { server ->
-            lifecycleScope.launch {
-                server.pendingRequestsFlow.collect { requests ->
-                    pendingRequestAdapter.submitList(requests)
+            pendingRequestsJob = lifecycleScope.launch {
+                repeatOnLifecycle(Lifecycle.State.STARTED) {
+                    server.pendingRequestsFlow.collect { requests ->
+                        pendingRequestAdapter.submitList(requests)
+                    }
                 }
             }
         }
+    }
+
+    private fun syncServerRunningState() {
+        val server = serverService?.getHttpServer()
+        isServerRunning = server != null
+        updateUI()
     }
 
     private fun startServer() {
@@ -168,21 +212,50 @@ class MainActivity : AppCompatActivity() {
     private fun updateUI() {
         if (isServerRunning) {
             tvServerStatus.text = getString(R.string.server_running)
-            tvServerStatus.setTextColor(getColor(android.R.color.holo_green_dark))
+            tvServerStatus.setTextColor(getColor(R.color.teal_700))
             btnToggleServer.text = getString(R.string.stop_server)
-            tvServerAddress.text = "http://${getIpAddress()}:8080"
+            val ip = getIpAddress()
+            if (ip != null) {
+                tvServerAddress.text = "http://$ip:8080"
+            } else {
+                tvServerAddress.text = getString(R.string.placeholder)
+            }
         } else {
             tvServerStatus.text = getString(R.string.server_stopped)
-            tvServerStatus.setTextColor(getColor(android.R.color.holo_red_dark))
+            tvServerStatus.setTextColor(getColor(R.color.purple_700))
             btnToggleServer.text = getString(R.string.start_server)
-            tvServerAddress.text = "-"
+            tvServerAddress.text = getString(R.string.placeholder)
         }
     }
 
-    private fun getIpAddress(): String {
+    private fun getIpAddress(): String? {
+        try {
+            val interfaces = NetworkInterface.getNetworkInterfaces()
+            while (interfaces.hasMoreElements()) {
+                val networkInterface = interfaces.nextElement()
+                if (networkInterface.isLoopback || !networkInterface.isUp) {
+                    continue
+                }
+                val addresses = networkInterface.inetAddresses
+                while (addresses.hasMoreElements()) {
+                    val address = addresses.nextElement()
+                    if (address is Inet4Address && !address.isLoopbackAddress) {
+                        return address.hostAddress
+                    }
+                }
+            }
+        } catch (e: Exception) {
+            // Fallback to WiFi method
+            return getWifiIpAddress()
+        }
+        return null
+    }
+
+    private fun getWifiIpAddress(): String? {
         val wifiManager = applicationContext.getSystemService(Context.WIFI_SERVICE) as WifiManager
         val wifiInfo = wifiManager.connectionInfo
         val ipAddress = wifiInfo.ipAddress
+        if (ipAddress == 0) return null
         return String.format(
             "%d.%d.%d.%d",
             ipAddress and 0xFF,
